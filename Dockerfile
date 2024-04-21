@@ -1,23 +1,23 @@
-FROM krmp-d2hub-idock.9rum.cc/goorm/openjdk:17-slim
+# gradle:7.3.1-jdk17 이미지를 기반으로 함
+FROM krmp-d2hub-idock.9rum.cc/goorm/gradle:7.3.1-jdk17
 
 # 작업 디렉토리 설정
-WORKDIR /app
+WORKDIR /home/gradle/project
 
-# 필요한 Python 스크립트를 이미지에 추가
-COPY gradlew /app/
-COPY gradle /app/gradle
-COPY build.gradle /app/
-COPY settings.gradle /app/
-COPY src /app/src
+# Spring 소스 코드를 이미지에 복사
+COPY . .
 
-RUN chmod +x ./gradlew && \
-    ./gradlew build -x test && \
-    mv build/libs/*.jar app.jar && \
-    rm -rf src && \
-    rm -rf build
+RUN chmod +x ./gradlew
 
-# 서버가 실행될 때 사용되는 포트
-EXPOSE 3000
+# gradle 빌드 시 proxy 설정을 gradle.properties에 추가
+RUN echo "systemProp.http.proxyHost=krmp-proxy.9rum.cc\nsystemProp.http.proxyPort=3128\nsystemProp.https.proxyHost=krmp-proxy.9rum.cc\nsystemProp.https.proxyPort=3128" > /root/.gradle/gradle.properties
 
-# 컨테이너를 시작할 때 Python 스크립트를 실행
-CMD ["java", "-jar", "app.jar"]
+# gradlew를 이용한 프로젝트 필드
+RUN ./gradlew clean build -x test -Pargs="-Xlint:deprecation"
+
+# DATABASE_URL을 환경 변수로 삽입
+ENV DATABASE_URL=jdbc:mariadb://mariadb/krampoline
+
+# 빌드 결과 jar 파일을 실행
+CMD ["java", "-jar", "-Dspring.profiles.active=prod", "/home/gradle/project/build/libs/roulette-1.0.jar"]
+
